@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FinTrack — Personal Finance Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<!-- ── Navbar ─────────────────────────────────────────────── -->
+<nav class="navbar">
+  <a class="navbar-brand" href="/">
+    <div class="navbar-icon">💰</div>
+    <span class="navbar-title">Fin<span>Track</span></span>
+  </a>
+  
+  <div class="navbar-date" id="currentDate"></div>
+
+  <div>
+  Welcome, {{ session['user'] }} |
+  <a href="/logout">Logout</a>
+</div>
+</nav>
+
+<!-- ── Page Wrapper ───────────────────────────────────────── -->
+<div class="page-wrapper">
+
+  <!-- KPI Row -->
+  <p class="section-label">Overview</p>
+  <div class="kpi-grid">
+
+    <div class="kpi-card blue">
+      <div class="kpi-icon">📊</div>
+      <div class="kpi-label">Monthly Spent</div>
+      <div class="kpi-value">₹{{ monthly_total }}</div>
+      <div class="kpi-sub">Current month</div>
+    </div>
+
+    <div class="kpi-card teal">
+      <div class="kpi-icon">🎯</div>
+      <div class="kpi-label">Budget Limit</div>
+      <div class="kpi-value">₹{{ budget }}</div>
+      <div class="kpi-sub">Monthly cap</div>
+    </div>
+
+    <div class="kpi-card green">
+      <div class="kpi-icon">📋</div>
+      <div class="kpi-label">Total Entries</div>
+      <div class="kpi-value">{{ expenses|length }}</div>
+      <div class="kpi-sub">All time records</div>
+    </div>
+
+  </div>
+
+  <!-- Budget Progress -->
+  {% set pct = [(monthly_total / budget * 100)|round|int, 100]|min %}
+  <div class="budget-card">
+    <div class="budget-header">
+      <div class="budget-title">💼 Budget Progress</div>
+
+      <form action="/set_budget" method="POST" style="margin-bottom:15px;">
+        <input class="form-control" type="number" name="budget"
+              placeholder="Set Monthly Budget (₹)" required>
+        <button class="btn-primary" type="submit">Update Budget</button>
+      </form>
+
+      <div class="budget-amounts">
+        <div class="budget-stat spent">
+          <div class="label">Spent</div>
+          <div class="value">₹{{ monthly_total }}</div>
+        </div>
+        <div class="budget-stat limit">
+          <div class="label">Limit</div>
+          <div class="value">₹{{ budget }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="progress-track">
+      <div class="progress-fill {% if monthly_total > budget %}over{% elif monthly_total > budget * 0.8 %}caution{% else %}safe{% endif %}"
+           style="width: {{ pct }}%"></div>
+    </div>
+    <div class="progress-labels">
+      <span>₹0</span>
+      <span>{{ pct }}% used</span>
+      <span>₹{{ budget }}</span>
+    </div>
+
+    {% if warning %}
+      {% if monthly_total > budget %}
+        <div class="alert alert-danger">🚨 {{ warning }}</div>
+      {% else %}
+        <div class="alert alert-warning">⚠️ {{ warning }}</div>
+      {% endif %}
+    {% else %}
+      <div class="alert alert-success">✅ You're within budget — keep it up!</div>
+    {% endif %}
+  </div>
+
+  <!-- Add Expense + Chart -->
+  <p class="section-label">Manage</p>
+  <div class="two-col">
+
+    <!-- Add Expense Form -->
+    <div class="card">
+      <div class="card-title">
+        <div class="card-title-icon">➕</div>
+        Add New Expense
+      </div>
+
+      <form action="/add" method="POST">
+        <div class="form-group">
+          <label for="category">Category</label>
+          <select id="category" name="category" class="form-control" required>
+            <option value="" disabled selected>Select category…</option>
+            <option>🍔 Food</option>
+            <option>🚗 Transport</option>
+            <option>🛍️ Shopping</option>
+            <option>💊 Health</option>
+            <option>📚 Education</option>
+            <option>🎬 Entertainment</option>
+            <option>🏠 Rent</option>
+            <option>💡 Utilities</option>
+            <option>✈️ Travel</option>
+            <option>📦 Other</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="amount">Amount (₹)</label>
+          <input id="amount" class="form-control" type="number" name="amount"
+                 placeholder="0.00" min="1" required>
+        </div>
+
+        <button class="btn-primary" type="submit">Add Expense →</button>
+      </form>
+    </div>
+
+
+    <!-- Pie Chart -->
+    <div class="card">
+      <div class="card-title">
+        <div class="card-title-icon">🥧</div>
+        Spending by Category
+      </div>
+      <div class="chart-wrap">
+        {% if labels %}
+          <canvas id="expenseChart"></canvas>
+        {% else %}
+          <div class="empty-state">
+            <div class="emoji">📭</div>
+            <p>No data yet — add your first expense!</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+
+
+<!-- Income + Savings -->
+<div class="two-col">
+
+  <!-- Income Card -->
+  <div class="card">
+    <div class="card-title">💰 Add Income</div>
+    <form action="/add_income" method="POST">
+      <input class="form-control" type="text" name="source" placeholder="Source" required>
+      <input class="form-control" type="number" name="amount" placeholder="Amount" required>
+      <button class="btn-primary">Add Income</button>
+    </form>
+  </div>
+
+  <!-- Savings Goal -->
+  <div class="card">
+    <div class="card-title">🎯 Savings Goal</div>
+    <form action="/add_goal" method="POST">
+      <input class="form-control" type="text" name="goal_name" placeholder="Goal name" required>
+      <input class="form-control" type="number" name="target_amount" placeholder="Target amount" required>
+      <button class="btn-primary">Create Goal</button>
+    </form>
+  </div>
+
+</div>
+
+<div class="card">
+  <div class="card-title">📈 Goals</div>
+
+  {% for g in goals %}
+    <p>{{ g[1] }} - ₹{{ g[3] }}/₹{{ g[2] }}</p>
+
+    <form action="/add_to_goal/{{ g[0] }}" method="POST">
+      <input class="form-control" type="number" name="amount" placeholder="Add money">
+      <button class="btn-primary">Add</button>
+    </form>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <div class="card-title">📊 Income vs Expense</div>
+  <canvas id="trendChart"></canvas>
+</div>
+
+
+  <!-- Transaction Table -->
+ <p class="section-label">Transactions</p>
+<div class="table-card">
+
+  <div class="table-header">
+    <div class="card-title">
+      🧾 Transaction Log
+    </div>
+  </div>
+
+  {% if transactions %}
+  <table class="expense-table">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Category / Source</th>
+        <th>Amount</th>
+        <th>Date</th>
+        <th>Action</th>  
+      </tr>
+    </thead>
+
+    <tbody>
+      {% for t in transactions %}
+      <tr>
+        <td>
+          {% if t[0] == "Income" %}
+            <span style="color:green;font-weight:bold;">+ Income</span>
+          {% else %}
+            <span style="color:red;font-weight:bold;">- Expense</span>
+          {% endif %}
+        </td>
+
+        <td>{{ t[2] }}</td>
+        <td>₹{{ t[3] }}</td>
+        <td>{{ t[4] }}</td>
+
+        <!-- ✅ NEW DELETE BUTTON COLUMN -->
+        <td>
+          {% if t[0] == "Income" %}
+            <form action="/delete_income/{{ t[1] }}" method="POST" style="display:inline;">
+              <button class="btn-danger">Delete</button>
+            </form>
+          {% else %}
+            <form action="/delete/{{ t[1] }}" method="POST" style="display:inline;">
+              <button class="btn-danger">Delete</button>
+            </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% else %}
+  <div class="empty-state">
+    <p>No transactions yet</p>
+  </div>
+  {% endif %}
+
+</div>
+
+</div><!-- end .page-wrapper -->
+
+<script>
+  // Set current date in navbar
+  document.getElementById('currentDate').textContent =
+    new Date().toLocaleDateString('en-IN', { weekday:'short', year:'numeric', month:'long', day:'numeric' });
+
+  // Chart
+  const chartLabels = JSON.parse('{{ labels | tojson | safe }}');
+  const chartValues = JSON.parse('{{ values | tojson | safe }}');
+ const totalIncome = Number("{{ total_income  }}");
+const totalExpenses = Number("{{ total_expenses }}");
+
+  if (chartLabels.length > 0) {
+    const palette = [
+      '#4F46E5','#06B6D4','#10B981','#F59E0B','#EF4444',
+      '#8B5CF6','#EC4899','#14B8A6','#F97316','#6366F1'
+    ];
+
+    new Chart(document.getElementById('expenseChart'), {
+      type: 'doughnut',
+      data: {
+        labels: chartLabels,
+        datasets: [{
+          data: chartValues,
+          backgroundColor: palette.slice(0, chartLabels.length),
+          borderWidth: 3,
+          borderColor: '#ffffff',
+          hoverBorderWidth: 4,
+          hoverOffset: 8
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '62%',
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: {
+              font: { family: "'Plus Jakarta Sans'", size: 12, weight: '600' },
+              color: '#475569',
+              padding: 14,
+              usePointStyle: true,
+              pointStyleWidth: 10
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => ` ₹${ctx.parsed.toLocaleString('en-IN')}`
+            },
+            bodyFont: { family: "'DM Mono'", size: 13 },
+            backgroundColor: '#0F172A',
+            titleColor: '#94A3B8',
+            bodyColor: '#F1F5F9',
+            padding: 12,
+            cornerRadius: 10
+          }
+        }
+      }
+    });
+}
+
+   
+
+new Chart(document.getElementById('trendChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Income', 'Expenses'],
+    datasets: [{
+      label: 'Comparison',
+      data: [totalIncome, totalExpenses]
+    }]
+  }
+});
+
+  
+</script>
+
+</body>
+</html>

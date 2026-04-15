@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# VS Code
+.vscode/
+
+# Database
+*.db
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Conda (optional)
+.conda/
+.env/
+*.conda
