@@ -21,6 +21,9 @@ jobs:
         pip install --upgrade pip
         pip install -r requirements.txt
 
+    - name: Build Docker image
+      run: docker build -t fintrack .
+      
     - name: Lint check
       run: flake8 .
 
